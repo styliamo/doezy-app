@@ -1,43 +1,55 @@
 import React, { useState } from "react";
 
-const Comments = () => {
-  const [comments, setComments] = useState<string[]>([]);
+type Comment = { author: string; text: string; date: string };
+
+export default function Comments() {
+  const [comments, setComments] = useState<Comment[]>([
+    { author: "Admin", text: "Projektstart! 🎉", date: "2025-06-29" },
+    { author: "Vendor", text: "Lieferung avisiert, Rückfragen offen.", date: "2025-07-01" },
+  ]);
   const [input, setInput] = useState("");
 
-  const handleAdd = () => {
+  function addComment() {
     if (!input.trim()) return;
-    setComments([...comments, input]);
+    setComments([
+      ...comments,
+      { author: "You", text: input, date: new Date().toISOString().slice(0, 10) },
+    ]);
     setInput("");
-  };
+  }
 
   return (
-    <div className="p-8 max-w-xl mx-auto">
-      <h2 className="text-xl font-bold mb-4">Kommentare</h2>
-      <div>
+    <div className="comments">
+      <div style={{ fontWeight: 600, fontSize: 20, marginBottom: 10 }}>Kommentare</div>
+      <div style={{ marginBottom: 18 }}>
         <input
-          type="text"
+          className="input-md"
+          style={{ width: 330 }}
           value={input}
-          className="border p-2 mr-2"
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Kommentar..."
+          onChange={e => setInput(e.target.value)}
+          placeholder="Kommentar hinzufügen..."
         />
-        <button
-          onClick={handleAdd}
-          className="bg-blue-700 text-white px-4 py-2 rounded"
-        >
-          Hinzufügen
+        <button className="btn-sm" onClick={addComment} style={{ marginLeft: 10 }}>
+          Publish
         </button>
       </div>
-      <ul className="mt-4">
+      <div>
         {comments.map((c, i) => (
-          <li key={i} className="py-1 border-b">
-            {c}
-          </li>
+          <div
+            key={i}
+            style={{
+              background: "#f3f3f3",
+              borderRadius: 8,
+              marginBottom: 8,
+              padding: "7px 16px",
+            }}
+          >
+            <b>{c.author}</b> <span style={{ color: "#aaa", fontSize: 13 }}>{c.date}</span>
+            <div>{c.text}</div>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
-};
-
-export default Comments;
+}
 
