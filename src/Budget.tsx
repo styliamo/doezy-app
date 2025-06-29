@@ -1,177 +1,321 @@
 import React, { useState } from "react";
 
-const KOSTENGRUPPEN = [
-  { nr: "610", name: "Möblierung" },
-  { nr: "620", name: "Elektro" },
-  { nr: "630", name: "Bodenbeläge" },
-  // ...weitere Blöcke aus HOAI bei Bedarf
+const HOAI_KOSTENBLOECKE = [
+  { nr: 400, label: "Technische Anlagen" },
+  { nr: 610, label: "Möblierung" },
+  { nr: 620, label: "Elektro" },
+  { nr: 630, label: "Bodenbeläge" },
+  { nr: 640, label: "Raumtextilien" },
+  { nr: 650, label: "Sonderausstattung" }
 ];
 
-const KATEGORIEN = [
-  { value: "FF&E", label: "FF&E" },
-  { value: "Construction", label: "Construction" },
-  { value: "Montage", label: "Montage" },
-];
+const VENDORS = ["–", "Exidation", "Visage", "Testfirma"];
 
-const VENDORS = [
-  { value: "-", label: "-" },
-  { value: "Exidation", label: "Exidation" },
-  // ...weitere Vendors
-];
+type Kategorie = "FF&E" | "Construction" | "Montage";
 
-function calcVK(einkauf: number, marge: number) {
-  return Math.round(einkauf * (1 + marge / 100));
+function getPositionsNummer(block: number, index: number, kategorie: Kategorie) {
+  if (kategorie === "Montage") {
+    return `${block}.${index + 1}.99`;
+  }
+  return `${block}.${index + 1}`;
 }
 
-export default function Budget() {
-  const [zeilen, setZeilen] = useState([
-    { artikel: "", menge: 1, ek: 0, kategorie: "FF&E", marge: 0, vendor: "-", transport: false },
+function Budget() {
+  const [role, setRole] = useState<"Admin" | "Vendor" | "Client">("Admin");
+  const [activeVendor, setActiveVendor] = useState("–");
+  const [blocks, setBlocks] = useState([
+    {
+      nr: 610,
+      label: "Möblierung",
+      zeilen: [
+        { artikel: "", menge: 1, ek: 0, kategorie: "FF&E" as Kategorie, marge: 0, vendor: "–" },
+      ],
+      lieferung: { menge: 1, ek: 0 }, // nur eine Transportzeile pro Block
+    },
   ]);
 
-  // Positioniert eine neue Zeile immer vor Transport, falls schon vorhanden
-  const addZeile = () => {
-    setZeilen((z) => {
-      const ohneTransport = z.filter((row) => !row.transport);
-      const transportRow = z.find((row) => row.transport);
-      const neue = [...ohneTransport, { artikel: "", menge: 1, ek: 0, kategorie: "FF&E", marge: 0, vendor: "-", transport: false }];
-      return transportRow ? [...neue, transportRow] : neue;
-    });
-  };
+  function handleAddBlock() {
+    const usedNrs = blocks.map((b) => b.nr);
+    const available = HOAI_KOSTENBLOECKE.filter((k) => !usedNrs.includes(k.nr));
+    if (available.length === 0) return;
+    const next = available[0];
+    setBlocks([
+      ...blocks,
+      {
+        nr: next.nr,
+        label: next.label,
+        zeilen: [
+          { artikel: "", menge: 1, ek: 0, kategorie: "FF&E" as Kategorie, marge: 0, vendor: "–" },
+        ],
+        lieferung: { menge: 1, ek: 0 },
+      },
+    ]);
+  }
 
-  // Fügt die Transportzeile als letzte hinzu (nur eine pro Block!)
-  const addTransport = () => {
-    setZeilen((z) =>
-      z.some((row) => row.transport)
-        ? z
-        : [...z, { artikel: "Liefer- und Transportkosten", menge: 1, ek: 0, kategorie: "", marge: 0, vendor: "-", transport: true }]
+  function handleAddZeile(bIndex: number) {
+    setBlocks((blocks) =>
+      blocks.map((b, i) =>
+        i !== bIndex
+          ? b
+          : {
+              ...b,
+              zeilen: [
+                ...b.zeilen,
+                { artikel: "", menge: 1, ek: 0, kategorie: "FF&E" as Kategorie, marge: 0, vendor: "–" },
+              ],
+            }
+      )
     );
-  };
+  }
 
-  // Löscht eine Zeile
-  const removeZeile = (idx: number) => setZeilen(zeilen.filter((_, i) => i !== idx));
+  function handleDeleteZeile(bIndex: number, zIndex: number) {
+    setBlocks((blocks) =>
+      blocks.map((b, i) =>
+        i !== bIndex ? b : { ...b, zeilen: b.zeilen.filter((_, j) => j !== zIndex) }
+      )
+    );
+  }
 
-  // Automatisch richtige Nummerierung: .99 für Montage, 99 für Transport, sonst fortlaufend
-  const nummer = (idx: number, row: any) => {
-    const basis = "610";
-    if (row.transport) return `${basis}.99`;
-    const pos = zeilen.filter((z, i) => !z.transport && i <= idx).filter((z) => !z.transport).length;
-    return row.kategorie === "Montage" ? `${basis}.${pos}.99` : `${basis}.${pos}`;
-  };
+  function handleDeleteBlock(bIndex: number) {
+    setBlocks((blocks) => blocks.filter((_, i) => i !== bIndex));
+  }
 
-  // Summe EK und VK
-  const sumEK = (row: any) => (row.menge > 0 ? row.menge * row.ek : 0);
-  const vkEinzel = (row: any) => calcVK(row.ek, row.marge);
-  const sumVK = (row: any) => (row.menge > 0 ? row.menge * vkEinzel(row) : 0);
+  function handleChangeZeile(bIndex: number, zIndex: number, key: string, value: any) {
+    setBlocks((blocks) =>
+      blocks.map((b, i) =>
+        i !== bIndex
+          ? b
+          : {
+              ...b,
+              zeilen: b.zeilen.map((z, j) =>
+                j !== zIndex
+                  ? z
+                  : { ...z, [key]: key === "menge" || key === "ek" || key === "marge" ? Number(value) : value }
+              ),
+            }
+      )
+    );
+  }
 
-  // Gesamtsummen
-  const totalEK = zeilen.filter((z) => !z.transport).reduce((a, z, i) => a + sumEK(z), 0);
-  const totalVK = zeilen.filter((z) => !z.transport).reduce((a, z, i) => a + sumVK(z), 0);
+  function handleChangeLieferung(bIndex: number, key: string, value: any) {
+    setBlocks((blocks) =>
+      blocks.map((b, i) =>
+        i !== bIndex ? b : { ...b, lieferung: { ...b.lieferung, [key]: Number(value) } }
+      )
+    );
+  }
 
-  // Transport berechnen: z.B. 5% von VK (hier: Prozent im EK-Feld, z.B. 5 für 5%)
-  const transportVK = (() => {
-    const t = zeilen.find((z) => z.transport);
-    if (!t) return 0;
-    const prozent = Number(t.ek) || 0;
-    return Math.round((prozent / 100) * totalVK);
-  })();
+  function getSummeEK(zeile: any) {
+    return zeile.menge * zeile.ek;
+  }
+  function getSummeVK(zeile: any) {
+    return zeile.menge * (zeile.ek + (zeile.ek * zeile.marge) / 100);
+  }
+  function blockSumme(block: any) {
+    return block.zeilen.reduce((sum: number, z: any) => sum + getSummeVK(z), 0) + block.lieferung.ek;
+  }
+  function blockFFESumme(block: any) {
+    return block.zeilen.filter((z: any) => z.kategorie === "FF&E").reduce((sum: number, z: any) => sum + getSummeVK(z), 0);
+  }
 
-  // Sichtbarkeit nach Rolle (hier nur Admin als Beispiel!)
-  const rolle = "Admin";
+  // Filter für Sichtbarkeit nach Rolle
+  function zeileVisible(z: any) {
+    if (role === "Admin") return true;
+    if (role === "Vendor") return z.vendor === activeVendor;
+    if (role === "Client") return true;
+    return false;
+  }
+  function lieferungVisible() {
+    // Admin & Client sehen Lieferung, Vendor nicht
+    return role !== "Vendor";
+  }
 
   return (
-    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-      <h3>Kostenblock 610 – Möblierung</h3>
-      <button onClick={addZeile}>+ Zeile</button>
-      <button onClick={addTransport} style={{ marginLeft: 8 }}>+ Liefer- und Transportkosten</button>
-      <table style={{ width: "100%", marginTop: 16 }}>
-        <thead>
-          <tr>
-            <th>Kostenblock</th>
-            <th>Artikel</th>
-            <th>Menge</th>
-            <th>Einzelpreis EK</th>
-            <th>Summe EK</th>
-            <th>Kategorie</th>
-            <th>Marge %</th>
-            <th>Vendor</th>
-            <th>VK Einzelpreis</th>
-            <th>VK Gesamtpreis</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {zeilen.map((row, idx) => (
-            <tr key={idx}>
-              <td>{nummer(idx, row)}</td>
-              <td>
-                <input value={row.artikel} onChange={e => {
-                  const n = [...zeilen];
-                  n[idx].artikel = e.target.value;
-                  setZeilen(n);
-                }} disabled={row.transport} style={{ width: 180 }} />
-              </td>
-              <td>
-                <input type="number" min={1} value={row.menge} onChange={e => {
-                  const n = [...zeilen];
-                  n[idx].menge = Math.max(1, Number(e.target.value));
-                  setZeilen(n);
-                }} disabled={row.transport} style={{ width: 60 }} />
-              </td>
-              <td>
-                <input type="number" min={0} value={row.ek} onChange={e => {
-                  const n = [...zeilen];
-                  n[idx].ek = Number(e.target.value);
-                  setZeilen(n);
-                }} style={{ width: 80 }} />
-              </td>
-              <td>{sumEK(row)}</td>
-              <td>
-                {!row.transport ? (
-                  <select value={row.kategorie} onChange={e => {
-                    const n = [...zeilen];
-                    n[idx].kategorie = e.target.value;
-                    setZeilen(n);
-                  }} style={{ width: 120 }}>
-                    {KATEGORIEN.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
-                  </select>
-                ) : null}
-              </td>
-              <td>
-                {!row.transport ? (
-                  <input type="number" min={0} max={99} value={row.marge} onChange={e => {
-                    const n = [...zeilen];
-                    n[idx].marge = Number(e.target.value);
-                    setZeilen(n);
-                  }} style={{ width: 60 }} />
-                ) : null}
-              </td>
-              <td>
-                {!row.transport ? (
-                  <select value={row.vendor} onChange={e => {
-                    const n = [...zeilen];
-                    n[idx].vendor = e.target.value;
-                    setZeilen(n);
-                  }} style={{ width: 120 }}>
-                    {VENDORS.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-                  </select>
-                ) : null}
-              </td>
-              <td>{!row.transport ? vkEinzel(row) : ""}</td>
-              <td>{!row.transport ? sumVK(row) : (transportVK)}</td>
-              <td>
-                {!row.transport && (
-                  <button onClick={() => removeZeile(idx)}>X</button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div style={{ marginTop: 20 }}>
-        <b>KG-Summe EK:</b> {totalEK} € <br />
-        <b>GESAMTSUMME VK:</b> {totalVK + transportVK} €
+    <div style={{ padding: 24 }}>
+      <div style={{ marginBottom: 10 }}>
+        <label>Rolle: </label>
+        <select value={role} onChange={e => setRole(e.target.value as any)} style={{ marginRight: 8 }}>
+          <option>Admin</option>
+          <option>Vendor</option>
+          <option>Client</option>
+        </select>
+        {role === "Vendor" && (
+          <>
+            <label>Vendor: </label>
+            <select value={activeVendor} onChange={e => setActiveVendor(e.target.value)}>
+              {VENDORS.map(v => <option key={v}>{v}</option>)}
+            </select>
+          </>
+        )}
+        {role === "Admin" && (
+          <button onClick={handleAddBlock} style={{ marginLeft: 16, fontWeight: 700 }}>+ Kostenblock hinzufügen</button>
+        )}
+      </div>
+      {blocks.map((block, bIndex) => (
+        <div key={block.nr} style={{ border: "1px solid #aaa", borderRadius: 7, marginBottom: 28, padding: 12, background: "#fff" }}>
+          <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 6 }}>
+            Kostenblock {block.nr} – {block.label}
+            {role === "Admin" && (
+              <button style={{ marginLeft: 8, fontSize: 14 }} onClick={() => handleDeleteBlock(bIndex)}>Löschen</button>
+            )}
+          </div>
+          <table style={{ width: "100%", fontSize: 15 }}>
+            <thead>
+              <tr>
+                <th>Kostenblock</th>
+                <th>Artikel</th>
+                <th>Menge</th>
+                {role !== "Client" && <th>Einzelpreis EK</th>}
+                {role !== "Client" && <th>Summe EK</th>}
+                <th>Kategorie</th>
+                {role === "Admin" && <th>Marge %</th>}
+                {role === "Admin" && <th>Vendor</th>}
+                <th>VK Einzelpreis</th>
+                <th>VK Gesamtpreis</th>
+                {role === "Admin" && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {block.zeilen.map((z, zIndex) =>
+                zeileVisible(z) ? (
+                  <tr key={zIndex}>
+                    <td>{getPositionsNummer(block.nr, zIndex, z.kategorie)}</td>
+                    <td>
+                      <input
+                        value={z.artikel}
+                        onChange={e => handleChangeZeile(bIndex, zIndex, "artikel", e.target.value)}
+                        style={{ width: 130 }}
+                        disabled={role === "Vendor" || role === "Client"}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min={1}
+                        value={z.menge}
+                        onChange={e => handleChangeZeile(bIndex, zIndex, "menge", Math.max(1, Number(e.target.value)))}
+                        style={{ width: 44 }}
+                        disabled={role === "Vendor" || role === "Client"}
+                      />
+                    </td>
+                    {role !== "Client" && (
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          value={z.ek}
+                          onChange={e => handleChangeZeile(bIndex, zIndex, "ek", Number(e.target.value))}
+                          style={{ width: 70 }}
+                          disabled={
+                            role === "Vendor"
+                              ? activeVendor !== z.vendor
+                              : role === "Client"
+                          }
+                        />
+                      </td>
+                    )}
+                    {role !== "Client" && (
+                      <td>{getSummeEK(z)}</td>
+                    )}
+                    <td>
+                      <select
+                        value={z.kategorie}
+                        onChange={e => handleChangeZeile(bIndex, zIndex, "kategorie", e.target.value)}
+                        disabled={role === "Vendor" || role === "Client"}
+                      >
+                        <option>FF&E</option>
+                        <option>Construction</option>
+                        <option>Montage</option>
+                      </select>
+                    </td>
+                    {role === "Admin" && (
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          value={z.marge}
+                          onChange={e => handleChangeZeile(bIndex, zIndex, "marge", Number(e.target.value))}
+                          style={{ width: 45 }}
+                        />
+                      </td>
+                    )}
+                    {role === "Admin" && (
+                      <td>
+                        <select
+                          value={z.vendor}
+                          onChange={e => handleChangeZeile(bIndex, zIndex, "vendor", e.target.value)}
+                        >
+                          {VENDORS.map(v => <option key={v}>{v}</option>)}
+                        </select>
+                      </td>
+                    )}
+                    <td>{z.ek + (z.ek * z.marge) / 100}</td>
+                    <td>{getSummeVK(z)}</td>
+                    {role === "Admin" && (
+                      <td>
+                        <button onClick={() => handleDeleteZeile(bIndex, zIndex)}>X</button>
+                      </td>
+                    )}
+                  </tr>
+                ) : null
+              )}
+              {lieferungVisible() && (
+                <tr>
+                  <td>{block.nr}.99</td>
+                  <td>Liefer- und Transportkosten</td>
+                  <td>
+                    <input
+                      type="number"
+                      min={1}
+                      value={block.lieferung.menge}
+                      onChange={e => handleChangeLieferung(bIndex, "menge", Math.max(1, Number(e.target.value)))}
+                      style={{ width: 44 }}
+                      disabled={role !== "Admin"}
+                    />
+                  </td>
+                  {role !== "Client" && (
+                    <td>
+                      <input
+                        type="number"
+                        min={0}
+                        value={block.lieferung.ek}
+                        onChange={e => handleChangeLieferung(bIndex, "ek", Number(e.target.value))}
+                        style={{ width: 70 }}
+                        disabled={role !== "Admin"}
+                      />
+                    </td>
+                  )}
+                  {role !== "Client" && (
+                    <td>{block.lieferung.menge * block.lieferung.ek}</td>
+                  )}
+                  <td>-</td>
+                  {role === "Admin" && <td>-</td>}
+                  {role === "Admin" && <td>-</td>}
+                  <td>-</td>
+                  <td>{block.lieferung.menge * block.lieferung.ek}</td>
+                  {role === "Admin" && <td></td>}
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {role === "Admin" && (
+            <button style={{ marginTop: 8 }} onClick={() => handleAddZeile(bIndex)}>+ Zeile</button>
+          )}
+          <div style={{ marginTop: 8 }}>
+            <b>KG-Summe:</b> {blockSumme(block)} €<br />
+            <b>FF&E-Summe:</b> {blockFFESumme(block)} €
+          </div>
+        </div>
+      ))}
+      <div style={{ marginTop: 18, fontWeight: 700 }}>
+        GESAMTSUMME: {blocks.reduce((s, b) => s + blockSumme(b), 0)} €
+      </div>
+      <div>
+        FF&E-GESAMTSUMME: {blocks.reduce((s, b) => s + blockFFESumme(b), 0)} €
       </div>
     </div>
   );
 }
+
+export default Budget;
 
