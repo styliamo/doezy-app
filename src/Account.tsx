@@ -1,5 +1,11 @@
 import React from "react";
-export default function Account() {
-  return <div style={{margin:32}}><h2>Account</h2></div>;
-}
+
+const Account = () => (
+  <div className="p-8 max-w-lg mx-auto">
+    <h2 className="text-xl font-bold mb-4">Account</h2>
+    <p>Accountdaten und Einstellungen (Platzhalter).</p>
+  </div>
+);
+
+export default Account;
 
