@@ -1,568 +1,415 @@
 import React, { useState } from "react";
 
-// Definition der HOAI/HUAI Kostenblöcke
-const KOSTENBLOECKE = [
-  { nummer: "400", name: "Technische Anlagen" },
-  { nummer: "610", name: "Möblierung" },
-  { nummer: "620", name: "Elektro" },
-  { nummer: "630", name: "Bodenbeläge" },
-  { nummer: "640", name: "Raumtextilien" },
-  { nummer: "650", name: "Sonderausstattung" }
+// Beispielhafte HOAI-Kostengruppen
+const HOAI_BLOCKS = [
+  { nr: "400", label: "400 – Technische Anlagen" },
+  { nr: "600", label: "600 – Ausstattung" },
+  { nr: "610", label: "610 – Möbelierung" },
+  { nr: "620", label: "620 – Elektro" },
+  { nr: "630", label: "630 – Bodenbeläge" },
+  { nr: "640", label: "640 – Raumtextilien" },
+  { nr: "650", label: "650 – Sonderausstattung" },
 ];
 
-const KATEGORIEN = ["FF&E", "Construction", "Montage"];
+const CATEGORIES = [
+  { value: "FF&E", label: "FF&E" },
+  { value: "Construction", label: "Construction" },
+  { value: "Montage", label: "Montage" },
+];
 
-const initialUser = {
-  rolle: "Admin", // Alternativ: "Vendor", "Kunde"
-  vendorName: "Exidation"
-};
-
-const initialVendors = [
+// Beispielhafte Vendor-Liste
+const VENDORS = [
   "Exidation",
   "Musterlieferant",
-  "TestVendor"
+  "Polsterwerk",
+  "Lighting GmbH",
 ];
 
-function getNextPositionsnummer(zeilen) {
-  let nummer = 1;
-  while (
-    zeilen.some(
-      (z) =>
-        z.nummer ===
-        `${z.kostenblock}.${nummer}${z.kategorie === "Montage" ? ".99" : ""}`
-    )
-  ) {
-    nummer++;
-  }
-  return nummer;
+function getNextRowNumber(rows: any[]) {
+  const filtered = rows.filter((r) => !String(r.nr).endsWith(".99"));
+  return (
+    (filtered.length > 0
+      ? Math.max(...filtered.map((r) => Number(r.nr.split(".")[1])))
+      : 0) + 1
+  );
 }
 
-function sortiereZeilen(zeilen) {
-  // Sortiert nach Positionsnummernlogik und 99-Anhang bei Montage
-  return [...zeilen].sort((a, b) => {
-    const aSplit = a.nummer.split(".");
-    const bSplit = b.nummer.split(".");
-    for (let i = 0; i < Math.max(aSplit.length, bSplit.length); i++) {
-      const na = parseInt(aSplit[i] || "0", 10);
-      const nb = parseInt(bSplit[i] || "0", 10);
-      if (na !== nb) return na - nb;
-    }
-    return 0;
-  });
+function formatRowNr(blockNr: string, idx: number, category: string) {
+  if (category === "Montage" || idx === 99) return `${blockNr}.99`;
+  return `${blockNr}.${idx}`;
 }
 
-export default function Budget() {
-  const [kostenbloecke, setKostenbloecke] = useState([
+function Budget() {
+  // Rollen-Demo (für UI-Test)
+  const [role, setRole] = useState("Admin");
+  const [vendor, setVendor] = useState(VENDORS[0]);
+  const [popup, setPopup] = useState(false);
+
+  // Budgetstruktur: Kostenblöcke mit Zeilen
+  const [blocks, setBlocks] = useState([
     {
-      kostenblock: "610",
-      name: "Möblierung",
-      zeilen: [
+      nr: "610",
+      label: "Möblierung",
+      rows: [
         {
-          nummer: "610.1",
+          nr: "610.1",
           artikel: "",
           menge: 1,
-          einzelpreis: 0,
+          ek: 0,
+          kategorie: "FF&E",
+          marge: 0,
+          vendor: "",
+        },
+        {
+          nr: "610.99",
+          artikel: "Liefer- und Transportkosten",
+          menge: 1,
+          ek: 0,
+          kategorie: "FF&E",
+          marge: 0,
+          vendor: "",
+        },
+      ],
+    },
+  ]);
+
+  // Kostenblock hinzufügen (Popup)
+  function addBlock(nr: string, label: string) {
+    if (blocks.some((b) => b.nr === nr)) return setPopup(false); // Kein Doppelblock
+    const newBlock = {
+      nr,
+      label,
+      rows: [
+        {
+          nr: `${nr}.1`,
+          artikel: "",
+          menge: 1,
+          ek: 0,
+          kategorie: "FF&E",
+          marge: 0,
+          vendor: "",
+        },
+        {
+          nr: `${nr}.99`,
+          artikel: "Liefer- und Transportkosten",
+          menge: 1,
+          ek: 0,
+          kategorie: "FF&E",
+          marge: 0,
+          vendor: "",
+        },
+      ],
+    };
+    // Nach Nummer einsortieren
+    const newBlocks = [...blocks, newBlock].sort((a, b) =>
+      Number(a.nr) - Number(b.nr)
+    );
+    setBlocks(newBlocks);
+    setPopup(false);
+  }
+
+  // Block löschen
+  function removeBlock(idx: number) {
+    setBlocks(blocks.filter((_, i) => i !== idx));
+  }
+
+  // Zeile hinzufügen (ohne .99)
+  function addRow(blockIdx: number) {
+    setBlocks((prev) => {
+      const updated = [...prev];
+      const block = updated[blockIdx];
+      const nextNr = getNextRowNumber(block.rows);
+      // Montagezeile checken (existiert schon als .99)
+      block.rows.splice(
+        block.rows.length - 1,
+        0,
+        {
+          nr: formatRowNr(block.nr, nextNr, "FF&E"),
+          artikel: "",
+          menge: 1,
+          ek: 0,
           kategorie: "FF&E",
           marge: 0,
           vendor: "",
         }
-      ],
-      lieferTransport: {
-        nummer: "610.99",
-        artikel: "Liefer- und Transportkosten",
-        menge: 1,
-        einzelpreis: 0,
-        kategorie: "FF&E",
-        marge: 0,
-        vendor: "",
-        istLieferTransport: true,
-        prozent: 0,
-      }
-    }
-  ]);
-  const [showKostenblockModal, setShowKostenblockModal] = useState(false);
-  const [user, setUser] = useState(initialUser);
-
-  // Kostenblock hinzufügen mit Modal
-  function handleKostenblockHinzufuegen(nummer, name) {
-    setKostenbloecke((prev) =>
-      sortiereKostenbloecke([
-        ...prev,
-        {
-          kostenblock: nummer,
-          name,
-          zeilen: [
-            {
-              nummer: `${nummer}.1`,
-              artikel: "",
-              menge: 1,
-              einzelpreis: 0,
-              kategorie: "FF&E",
-              marge: 0,
-              vendor: "",
-            }
-          ],
-          lieferTransport: {
-            nummer: `${nummer}.99`,
-            artikel: "Liefer- und Transportkosten",
-            menge: 1,
-            einzelpreis: 0,
-            kategorie: "FF&E",
-            marge: 0,
-            vendor: "",
-            istLieferTransport: true,
-            prozent: 0,
-          }
-        }
-      ])
-    );
-    setShowKostenblockModal(false);
-  }
-
-  // Kostenblöcke sortieren nach Nummer
-  function sortiereKostenbloecke(bl) {
-    return [...bl].sort((a, b) => parseInt(a.kostenblock) - parseInt(b.kostenblock));
-  }
-
-  // Zeile hinzufügen
-  function handleZeileHinzufuegen(idx) {
-    setKostenbloecke((prev) => {
-      const klone = [...prev];
-      const block = { ...klone[idx] };
-      const zeilen = [...block.zeilen];
-      const nextNr = zeilen.length + 1;
-      zeilen.push({
-        nummer: `${block.kostenblock}.${nextNr}`,
-        artikel: "",
-        menge: 1,
-        einzelpreis: 0,
-        kategorie: "FF&E",
-        marge: 0,
-        vendor: "",
-      });
-      block.zeilen = sortiereZeilen(zeilen);
-      klone[idx] = block;
-      return klone;
-    });
-  }
-
-  // Zeile ändern
-  function handleZeileChange(blockIdx, zeileIdx, feld, value) {
-    setKostenbloecke((prev) => {
-      const klone = [...prev];
-      const block = { ...klone[blockIdx] };
-      const zeilen = [...block.zeilen];
-      let zeile = { ...zeilen[zeileIdx] };
-      if (feld === "kategorie" && value === "Montage" && !zeile.nummer.endsWith(".99")) {
-        zeile.nummer = `${block.kostenblock}.${zeile.nummer.split(".")[1]}.99`;
-      }
-      if (feld === "kategorie" && value !== "Montage" && zeile.nummer.endsWith(".99")) {
-        zeile.nummer = `${block.kostenblock}.${zeile.nummer.split(".")[1]}`;
-      }
-      if (feld === "menge") {
-        zeile[feld] = Math.max(1, parseInt(value) || 1);
-      } else {
-        zeile[feld] = value;
-      }
-      zeilen[zeileIdx] = zeile;
-      block.zeilen = sortiereZeilen(zeilen);
-      klone[blockIdx] = block;
-      return klone;
+      );
+      return updated;
     });
   }
 
   // Zeile löschen
-  function handleZeileLoeschen(blockIdx, zeileIdx) {
-    setKostenbloecke((prev) => {
-      const klone = [...prev];
-      const block = { ...klone[blockIdx] };
-      const zeilen = [...block.zeilen];
-      zeilen.splice(zeileIdx, 1);
-      block.zeilen = zeilen;
-      klone[blockIdx] = block;
-      return klone;
+  function removeRow(blockIdx: number, rowIdx: number) {
+    setBlocks((prev) => {
+      const updated = [...prev];
+      updated[blockIdx].rows = updated[blockIdx].rows.filter((_, i) => i !== rowIdx);
+      // Nummerierung korrigieren
+      updated[blockIdx].rows = updated[blockIdx].rows.map((r, i) => {
+        // .99 bleibt .99
+        if (r.nr.endsWith(".99")) return r;
+        return { ...r, nr: `${updated[blockIdx].nr}.${i + 1}` };
+      });
+      return updated;
     });
   }
 
-  // Kostenblock löschen
-  function handleKostenblockLoeschen(idx) {
-    setKostenbloecke((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  // Liefer- und Transportkosten ändern
-  function handleLieferTransportChange(blockIdx, feld, value) {
-    setKostenbloecke((prev) => {
-      const klone = [...prev];
-      const block = { ...klone[blockIdx] };
-      const ltk = { ...block.lieferTransport };
-      if (feld === "prozent") {
-        ltk.prozent = Math.max(0, Math.min(100, parseInt(value) || 0));
-        // Automatisch Einzelpreis berechnen (auf VK aller Zeilen, außer Montage/Transport)
-        const vkSumme = block.zeilen
-          .filter((z) => !z.istLieferTransport && z.kategorie !== "Montage")
-          .reduce(
-            (sum, z) =>
-              sum + ((z.einzelpreis * z.menge) * (1 + (parseFloat(z.marge) || 0) / 100)),
-            0
-          );
-        ltk.einzelpreis = Math.round((vkSumme * ltk.prozent) / 100);
-      } else {
-        ltk[feld] = value;
+  // Eingabewerte ändern
+  function onChange(blockIdx: number, rowIdx: number, field: string, value: any) {
+    setBlocks((prev) => {
+      const updated = [...prev];
+      let row = { ...updated[blockIdx].rows[rowIdx] };
+      if (field === "menge") {
+        // Mindestens 1!
+        value = Math.max(1, Number(value));
       }
-      block.lieferTransport = ltk;
-      klone[blockIdx] = block;
-      return klone;
+      if (field === "kategorie" && value === "Montage") {
+        // Zeilennummer auf .99
+        row.nr = `${updated[blockIdx].nr}.99`;
+        row.kategorie = "Montage";
+        row.artikel = "Montage";
+      } else if (field === "kategorie" && row.nr.endsWith(".99")) {
+        // Wenn Kategorie von Montage auf anderes geändert wird: neue Nummer!
+        const rowsWithout99 = updated[blockIdx].rows.filter(r => !r.nr.endsWith(".99"));
+        const newNr = `${updated[blockIdx].nr}.${rowsWithout99.length + 1}`;
+        row.nr = newNr;
+        row.kategorie = value;
+        row.artikel = "";
+      } else if (field === "kategorie") {
+        row.kategorie = value;
+      } else {
+        row[field] = value;
+      }
+      updated[blockIdx].rows[rowIdx] = row;
+      return updated;
     });
   }
 
-  // Summe je Block berechnen
-  function blockSummen(block) {
-    let ek = block.zeilen.reduce(
-      (sum, z) => sum + ((parseFloat(z.einzelpreis) || 0) * (parseFloat(z.menge) || 1)),
-      0
-    );
-    let vk = block.zeilen.reduce(
-      (sum, z) =>
-        sum +
-        ((parseFloat(z.einzelpreis) || 0) *
-          (parseFloat(z.menge) || 1) *
-          (1 + (parseFloat(z.marge) || 0) / 100)),
-      0
-    );
-    // Liefer- und Transportkosten dazurechnen (nur VK!)
-    vk += parseFloat(block.lieferTransport.einzelpreis) || 0;
-    return { ek, vk };
+  // Vendor-Zuweisung
+  function onVendor(blockIdx: number, rowIdx: number, value: string) {
+    setBlocks((prev) => {
+      const updated = [...prev];
+      updated[blockIdx].rows[rowIdx].vendor = value;
+      return updated;
+    });
   }
 
-  // Gesamtsummen berechnen
-  const ffesumme = kostenbloecke
-    .map((block) =>
-      block.zeilen
-        .filter((z) => z.kategorie === "FF&E")
-        .reduce(
-          (sum, z) =>
-            sum +
-            ((parseFloat(z.einzelpreis) || 0) *
-              (parseFloat(z.menge) || 1) *
-              (1 + (parseFloat(z.marge) || 0) / 100)),
-          0
-        )
-    )
-    .reduce((a, b) => a + b, 0);
+  // Summenberechnung (EK/VK/FF&E)
+  function calc(block: any) {
+    let kgSum = 0;
+    let ffesum = 0;
+    block.rows.forEach((row: any) => {
+      if (!row.nr.endsWith(".99") && row.kategorie) {
+        const ek = Number(row.ek) || 0;
+        const menge = Number(row.menge) || 1;
+        const marge = Number(row.marge) || 0;
+        const vkEinzel = ek * (1 + marge / 100);
+        const vkGesamt = vkEinzel * menge;
+        kgSum += vkGesamt;
+        if (row.kategorie === "FF&E") ffesum += vkGesamt;
+      }
+    });
+    // Transportkosten (.99): berechnen sich prozentual aus KG-Summe
+    const tRow = block.rows.find((r: any) => r.nr.endsWith(".99") && r.artikel === "Liefer- und Transportkosten");
+    if (tRow) {
+      const perc = Number(tRow.ek) || 0;
+      tRow.vkEinzel = Math.round(kgSum * perc / 100);
+      tRow.vkGesamt = tRow.vkEinzel;
+      kgSum += tRow.vkGesamt;
+    }
+    return { kgSum, ffesum };
+  }
 
-  const gesamtsumme = kostenbloecke
-    .map((block) => blockSummen(block).vk)
-    .reduce((a, b) => a + b, 0);
+  // Gesamtsummen
+  let ffesumAll = 0;
+  let kgsumAll = 0;
+  blocks.forEach((b) => {
+    const { kgSum, ffesum } = calc(b);
+    kgsumAll += kgSum;
+    ffesumAll += ffesum;
+  });
+
+  // Sichtbarkeiten je Rolle
+  function isVisible(row: any) {
+    if (role === "Admin") return true;
+    if (role === "Vendor") return row.vendor === vendor;
+    if (role === "Kunde") return true;
+    return false;
+  }
+  function isEditable(row: any, field: string) {
+    if (role === "Admin") return true;
+    if (role === "Vendor" && field === "ek" && row.vendor === vendor) return true;
+    return false;
+  }
+  function showField(field: string) {
+    if (role === "Admin") return true;
+    if (role === "Vendor") return ["artikel", "menge", "ek", "kategorie", "vendor"].includes(field);
+    if (role === "Kunde") return ["artikel", "menge", "vkEinzel", "vkGesamt"].includes(field);
+    return false;
+  }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Budget-Tabelle</h2>
-      <div>
-        <button onClick={() => setShowKostenblockModal(true)}>
-          + Kostenblock hinzufügen
-        </button>
-      </div>
-      {kostenbloecke.map((block, idx) => (
-        <div
-          key={block.kostenblock}
-          style={{
-            border: "1px solid #ccc",
-            borderRadius: 10,
-            marginTop: 20,
-            padding: 10,
-            background: "#fff",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ fontWeight: 600, fontSize: 16 }}>
-              Kostenblock {block.kostenblock} – {block.name}
-            </div>
-            <button
-              style={{
-                marginLeft: 8,
-                fontSize: 14,
-                background: "#eee",
-                border: "none",
-                padding: "2px 8px",
-                cursor: "pointer",
-              }}
-              onClick={() => handleKostenblockLoeschen(idx)}
-              title="Block löschen"
-            >
-              x
-            </button>
-          </div>
-          <table style={{ width: "100%", marginTop: 10 }}>
-            <thead>
-              <tr>
-                <th>Kostenblock</th>
-                <th>Artikel</th>
-                <th>Menge</th>
-                <th>Einzelpreis EK</th>
-                <th>Summe EK</th>
-                <th>Kategorie</th>
-                <th>Marge %</th>
-                <th>Vendor</th>
-                <th>VK Einzelpreis</th>
-                <th>VK Gesamtpreis</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {block.zeilen.map((zeile, zeileIdx) => (
-                <tr key={zeile.nummer}>
-                  <td>{zeile.nummer}</td>
-                  <td>
-                    <input
-                      value={zeile.artikel}
-                      onChange={(e) =>
-                        handleZeileChange(idx, zeileIdx, "artikel", e.target.value)
-                      }
-                      style={{ width: 110 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={zeile.menge}
-                      min={1}
-                      onChange={(e) =>
-                        handleZeileChange(idx, zeileIdx, "menge", e.target.value)
-                      }
-                      style={{ width: 55 }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={zeile.einzelpreis}
-                      min={0}
-                      onChange={(e) =>
-                        handleZeileChange(idx, zeileIdx, "einzelpreis", e.target.value)
-                      }
-                      style={{ width: 80 }}
-                    />
-                  </td>
-                  <td>
-                    {parseFloat(zeile.einzelpreis || 0) *
-                      parseInt(zeile.menge || 1)}
-                  </td>
-                  <td>
-                    <select
-                      value={zeile.kategorie}
-                      onChange={(e) =>
-                        handleZeileChange(idx, zeileIdx, "kategorie", e.target.value)
-                      }
-                    >
-                      {KATEGORIEN.map((k) => (
-                        <option key={k} value={k}>
-                          {k}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={zeile.marge}
-                      min={0}
-                      max={99}
-                      onChange={(e) =>
-                        handleZeileChange(idx, zeileIdx, "marge", e.target.value)
-                      }
-                      style={{ width: 55 }}
-                    />
-                  </td>
-                  <td>
-                    <select
-                      value={zeile.vendor}
-                      onChange={(e) =>
-                        handleZeileChange(idx, zeileIdx, "vendor", e.target.value)
-                      }
-                    >
-                      <option value="">–</option>
-                      {initialVendors.map((vn) => (
-                        <option key={vn} value={vn}>
-                          {vn}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-                  <td>
-                    {Math.round(
-                      parseFloat(zeile.einzelpreis || 0) *
-                        (1 + (parseFloat(zeile.marge) || 0) / 100)
-                    )}
-                  </td>
-                  <td>
-                    {Math.round(
-                      parseFloat(zeile.einzelpreis || 0) *
-                        parseInt(zeile.menge || 1) *
-                        (1 + (parseFloat(zeile.marge) || 0) / 100)
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      style={{
-                        fontSize: 14,
-                        background: "#eee",
-                        border: "none",
-                        padding: "2px 6px",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => handleZeileLoeschen(idx, zeileIdx)}
-                    >
-                      x
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {/* Liefer- und Transportkosten */}
-              <tr>
-                <td>{block.lieferTransport.nummer}</td>
-                <td>
-                  <input
-                    value={block.lieferTransport.artikel}
-                    disabled
-                    style={{ width: 140 }}
-                  />
-                </td>
-                <td>
-                  <input value={1} disabled style={{ width: 55 }} />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={block.lieferTransport.einzelpreis}
-                    min={0}
-                    disabled
-                    style={{ width: 80 }}
-                  />
-                </td>
-                <td>
-                  {block.lieferTransport.einzelpreis}
-                </td>
-                <td>
-                  <select disabled>
-                    <option>FF&E</option>
-                  </select>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={block.lieferTransport.prozent}
-                    min={0}
-                    max={100}
-                    onChange={(e) =>
-                      handleLieferTransportChange(
-                        idx,
-                        "prozent",
-                        e.target.value
-                      )
-                    }
-                    style={{ width: 55 }}
-                  />{" "}
-                  %
-                </td>
-                <td>
-                  <select disabled>
-                    <option>–</option>
-                  </select>
-                </td>
-                <td>{block.lieferTransport.einzelpreis}</td>
-                <td>{block.lieferTransport.einzelpreis}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
-          <button onClick={() => handleZeileHinzufuegen(idx)} style={{ marginTop: 6 }}>
-            + Zeile
-          </button>
-          <div style={{ marginTop: 8, fontSize: 14 }}>
-            KG-Summe: {blockSummen(block).vk.toLocaleString("de-DE", { style: "currency", currency: "EUR" })} <br />
-            FF&E-Summe: {block.zeilen
-              .filter((z) => z.kategorie === "FF&E")
-              .reduce(
-                (sum, z) =>
-                  sum +
-                  ((parseFloat(z.einzelpreis) || 0) *
-                    (parseFloat(z.menge) || 1) *
-                    (1 + (parseFloat(z.marge) || 0) / 100)),
-                0
-              ).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
-          </div>
+    <div style={{ maxWidth: 1300, margin: "2rem auto", fontFamily: "Inter, Arial, sans-serif" }}>
+      {/* Rollenauswahl (für Demo) */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
+        <div>
+          Rolle:&nbsp;
+          <select value={role} onChange={e => setRole(e.target.value)}>
+            <option>Admin</option>
+            <option>Vendor</option>
+            <option>Kunde</option>
+          </select>
         </div>
-      ))}
-      <div style={{ marginTop: 18, fontWeight: 600, fontSize: 16 }}>
-        FF&E-Summe: {ffesumme.toLocaleString("de-DE", { style: "currency", currency: "EUR" })} <br />
-        GESAMTSUMME: {gesamtsumme.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}
-      </div>
-
-      {showKostenblockModal && (
-        <div
-          style={{
-            position: "fixed",
-            left: 0,
-            top: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.2)",
-            zIndex: 20,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 12,
-              padding: 32,
-              minWidth: 340,
-              boxShadow: "0 2px 12px #0002"
-            }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 18, marginBottom: 12 }}>
-              Kostenblock auswählen
-            </div>
-            <ul>
-              {KOSTENBLOECKE.filter(
-                (kb) => !kostenbloecke.some((k) => k.kostenblock === kb.nummer)
-              ).map((kb) => (
-                <li key={kb.nummer} style={{ margin: "12px 0" }}>
-                  <button
-                    style={{
-                      padding: "8px 18px",
-                      borderRadius: 7,
-                      border: "1px solid #ccc",
-                      cursor: "pointer",
-                      background: "#f5f5f5",
-                      fontWeight: 500
-                    }}
-                    onClick={() => handleKostenblockHinzufuegen(kb.nummer, kb.name)}
-                  >
-                    {kb.nummer} – {kb.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <button
-              style={{
-                marginTop: 12,
-                background: "#eee",
-                border: "none",
-                padding: "6px 18px",
-                borderRadius: 7,
-                cursor: "pointer"
-              }}
-              onClick={() => setShowKostenblockModal(false)}
-            >
-              Abbrechen
-            </button>
+        {role === "Vendor" && (
+          <div>
+            Vendor:&nbsp;
+            <select value={vendor} onChange={e => setVendor(e.target.value)}>
+              {VENDORS.map(v => <option key={v}>{v}</option>)}
+            </select>
           </div>
+        )}
+        <button style={{ marginLeft: "auto", fontSize: 14 }} onClick={() => setPopup(true)}>+ Kostenblock hinzufügen</button>
+      </div>
+      {popup && (
+        <div style={{
+          background: "#fff", border: "1px solid #444", position: "absolute", zIndex: 9, padding: 20,
+          boxShadow: "0 6px 32px #0003"
+        }}>
+          <div style={{ marginBottom: 12 }}>Kostenblock auswählen</div>
+          {HOAI_BLOCKS.map(block => (
+            <div key={block.nr} style={{ marginBottom: 7 }}>
+              <button
+                style={{ minWidth: 280, textAlign: "left", fontWeight: 600, padding: 5, background: "#222", color: "#fff", borderRadius: 4 }}
+                onClick={() => addBlock(block.nr, block.label.split("–")[1]?.trim() || "")}
+                disabled={blocks.some(b => b.nr === block.nr)}
+              >
+                {block.label}
+              </button>
+            </div>
+          ))}
+          <button style={{ marginTop: 16 }} onClick={() => setPopup(false)}>Abbrechen</button>
         </div>
       )}
+      {/* Kostenblöcke */}
+      {blocks.map((block, blockIdx) => {
+        const { kgSum, ffesum } = calc(block);
+        return (
+          <div key={block.nr} style={{
+            margin: "30px 0 18px 0",
+            border: "1px solid #eee",
+            borderRadius: 8,
+            boxShadow: "0 2px 8px #0001",
+            background: "#fafbfc",
+            padding: "1rem 2rem 2rem 2rem"
+          }}>
+            <div style={{
+              display: "flex", alignItems: "center", marginBottom: 10,
+              borderBottom: "1px solid #ccc", paddingBottom: 2
+            }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>
+                Kostenblock {block.nr} – <span style={{ fontWeight: 400, fontSize: 16 }}>{block.label}</span>
+              </div>
+              <button style={{ marginLeft: 12, fontSize: 13, padding: "2px 7px", background: "#eee", border: "1px solid #bbb", borderRadius: 4, cursor: "pointer" }}
+                onClick={() => removeBlock(blockIdx)}>x</button>
+            </div>
+            <table style={{ width: "100%", fontSize: 15, borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#fff" }}>
+                  <th align="left">Kostenblock</th>
+                  <th align="left">Artikel</th>
+                  <th>Menge</th>
+                  {showField("ek") && <th>Einzelpreis EK</th>}
+                  {showField("summeEk") && <th>Summe EK</th>}
+                  {showField("kategorie") && <th>Kategorie</th>}
+                  {showField("marge") && <th>Marge %</th>}
+                  {showField("vendor") && <th>Vendor</th>}
+                  {showField("vkEinzel") && <th>VK Einzelpreis</th>}
+                  {showField("vkGesamt") && <th>VK Gesamtpreis</th>}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {block.rows.filter(isVisible).map((row, rowIdx) => {
+                  // EK und Marge
+                  const ek = Number(row.ek) || 0;
+                  const menge = Number(row.menge) || 1;
+                  const marge = Number(row.marge) || 0;
+                  const vkEinzel = Math.round(ek * (1 + marge / 100));
+                  const vkGesamt = Math.round(vkEinzel * menge);
+
+                  return (
+                    <tr key={row.nr} style={row.nr.endsWith(".99") ? { background: "#f7f7fa" } : {}}>
+                      <td>{row.nr}</td>
+                      <td>
+                        {row.nr.endsWith(".99") ?
+                          (row.artikel || "Liefer- und Transportkosten")
+                          : (
+                            showField("artikel") ?
+                              <input type="text" value={row.artikel} disabled={!isEditable(row, "artikel")} onChange={e => onChange(blockIdx, rowIdx, "artikel", e.target.value)} style={{ width: 140 }} />
+                              : row.artikel
+                          )}
+                      </td>
+                      <td>
+                        <input type="number" min={1} value={menge} disabled={row.nr.endsWith(".99") || !isEditable(row, "menge")}
+                          style={{ width: 60 }} onChange={e => onChange(blockIdx, rowIdx, "menge", e.target.value)} />
+                      </td>
+                      {showField("ek") &&
+                        <td>
+                          <input type="number" min={0} value={ek} disabled={!isEditable(row, "ek")} style={{ width: 70 }} onChange={e => onChange(blockIdx, rowIdx, "ek", e.target.value)} />
+                        </td>}
+                      {showField("summeEk") &&
+                        <td>{ek * menge}</td>}
+                      {showField("kategorie") &&
+                        <td>
+                          <select value={row.kategorie}
+                            disabled={row.nr.endsWith(".99") || !isEditable(row, "kategorie")}
+                            onChange={e => onChange(blockIdx, rowIdx, "kategorie", e.target.value)}
+                          >
+                            {CATEGORIES.map(cat => <option key={cat.value}>{cat.value}</option>)}
+                          </select>
+                        </td>}
+                      {showField("marge") &&
+                        <td>
+                          <input type="number" min={0} value={marge} disabled={!isEditable(row, "marge")} style={{ width: 60 }} onChange={e => onChange(blockIdx, rowIdx, "marge", e.target.value)} />
+                        </td>}
+                      {showField("vendor") &&
+                        <td>
+                          <select value={row.vendor} onChange={e => onVendor(blockIdx, rowIdx, e.target.value)}>
+                            <option value="">–</option>
+                            {VENDORS.map(v => <option key={v}>{v}</option>)}
+                          </select>
+                        </td>}
+                      {showField("vkEinzel") &&
+                        <td>{vkEinzel}</td>}
+                      {showField("vkGesamt") &&
+                        <td>{vkGesamt}</td>}
+                      <td>
+                        {row.nr.endsWith(".99") ? null :
+                          <button onClick={() => removeRow(blockIdx, rowIdx)} style={{ fontSize: 13, background: "#fff", border: "1px solid #ccc", borderRadius: 3, padding: "2px 7px" }}>X</button>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {/* Add Row */}
+            {role === "Admin" && (
+              <button style={{ marginTop: 10, fontSize: 15, padding: "4px 18px" }} onClick={() => addRow(blockIdx)}>+ Zeile</button>
+            )}
+            {/* Summen */}
+            <div style={{ marginTop: 10 }}>
+              <span style={{ marginRight: 20 }}>KG-Summe: <b>{kgSum} €</b></span>
+              <span>FF&E-Summe: <b>{ffesum} €</b></span>
+            </div>
+          </div>
+        );
+      })}
+      {/* Gesamtsummen */}
+      <div style={{ margin: "30px 0 10px 0", fontWeight: 700, fontSize: 16 }}>
+        FF&E-Summe: {ffesumAll} €<br />
+        GESAMTSUMME: {kgsumAll} €
+      </div>
     </div>
   );
 }
+
+export default Budget;
 
