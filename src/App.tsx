@@ -1,21 +1,27 @@
-
-import React from "react";
+import React, { useState } from "react";
 import Budget from "./Budget";
-// Falls du Navigation oder andere Tabs hast, importiere sie hier:
-// import Navigation from "./Navigation";
-// import Projects from "./Projects";
-// import UserManagement from "./UserManagement";
-// import Timetable from "./Timetable";
+import UserManagement from "./UserManagement";
+import Timetable from "./Timetable";
+import Account from "./Account";
 
-function App() {
+export default function App() {
+  const [page, setPage] = useState("budget");
   return (
-    <div style={{ fontFamily: "Inter, Arial, sans-serif", background: "#fafbfc", minHeight: "100vh", padding: 32 }}>
-      {/* Hier nur das Budget-Modul direkt gerendert */}
-      <h1 style={{ fontWeight: 900, fontSize: 28, marginBottom: 18 }}>DOSI Dashboard – Budget</h1>
-      <Budget />
+    <div>
+      <header style={{display:"flex", gap:16, alignItems:"center", marginBottom:24}}>
+        <h1>DOSI Dashboard</h1>
+        <button onClick={() => setPage("budget")}>Budget</button>
+        <button onClick={() => setPage("users")}>User-Verwaltung</button>
+        <button onClick={() => setPage("timetable")}>Timetable</button>
+        <button onClick={() => setPage("account")}>Account</button>
+      </header>
+      <main>
+        {page === "budget" && <Budget />}
+        {page === "users" && <UserManagement />}
+        {page === "timetable" && <Timetable />}
+        {page === "account" && <Account />}
+      </main>
     </div>
   );
 }
-
-export default App;
 
