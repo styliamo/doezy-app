@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 
 const HOAI_KOSTENBLOECKE = [
-  { nr: 400, label: "Technische Anlagen" },
   { nr: 610, label: "Möblierung" },
   { nr: 620, label: "Elektro" },
   { nr: 630, label: "Bodenbeläge" },
@@ -10,7 +9,6 @@ const HOAI_KOSTENBLOECKE = [
 ];
 
 const VENDORS = ["–", "Exidation", "Visage", "Testfirma"];
-
 type Kategorie = "FF&E" | "Construction" | "Montage";
 
 function getPositionsNummer(block: number, index: number, kategorie: Kategorie) {
@@ -30,7 +28,7 @@ function Budget() {
       zeilen: [
         { artikel: "", menge: 1, ek: 0, kategorie: "FF&E" as Kategorie, marge: 0, vendor: "–" },
       ],
-      lieferung: { menge: 1, ek: 0 }, // nur eine Transportzeile pro Block
+      lieferung: { menge: 1, ek: 0 }, // eine Transportzeile pro Block
     },
   ]);
 
@@ -117,8 +115,6 @@ function Budget() {
   function blockFFESumme(block: any) {
     return block.zeilen.filter((z: any) => z.kategorie === "FF&E").reduce((sum: number, z: any) => sum + getSummeVK(z), 0);
   }
-
-  // Filter für Sichtbarkeit nach Rolle
   function zeileVisible(z: any) {
     if (role === "Admin") return true;
     if (role === "Vendor") return z.vendor === activeVendor;
@@ -126,7 +122,6 @@ function Budget() {
     return false;
   }
   function lieferungVisible() {
-    // Admin & Client sehen Lieferung, Vendor nicht
     return role !== "Vendor";
   }
 
